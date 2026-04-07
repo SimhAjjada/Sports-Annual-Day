@@ -7,6 +7,7 @@ import Matches from "./pages/Matches";
 import Tournament from "./pages/Tournament";
 import Events from "./pages/Events";
 import Players from "./pages/Players";
+import Chat from "./pages/Chat";
 
 const App = () => {
   return (
@@ -20,6 +21,7 @@ const App = () => {
           <Route path="/events" element={<Events />} />
           <Route path="/players" element={<Players />} />
           <Route path="/tournament" element={<Tournament />} />
+          <Route path="/chat" element={<Chat />} />
         </Routes>
       </Layout>
     </BrowserRouter>

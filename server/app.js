@@ -24,5 +24,6 @@ app.use("/api/teams", teamRoutes);
 app.use("/api/matches", matchRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/event-sports", eventSportRoutes);
+app.use("/api/chat", require("./routes/chatRoutes"));
 
 module.exports = app;

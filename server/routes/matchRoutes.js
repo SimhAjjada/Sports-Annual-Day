@@ -9,6 +9,12 @@ const {
   startRound,
   resetTournament,
 
+  startMatch,
+  pauseMatch,
+  resumeMatch,
+  submitReport,
+  getReport
+
 } = require("../controllers/matchController");
 
 // generate matches
@@ -26,5 +32,12 @@ router.post("/next-round", generateNextRound);
 router.post("/start-round", startRound);
 
 router.post("/reset", resetTournament);
+
+
+router.post("/start", startMatch);
+router.post("/pause", pauseMatch);
+router.post("/resume", resumeMatch);
+router.post("/report", submitReport);
+router.get("/:id/report", getReport);
 
 module.exports = router;

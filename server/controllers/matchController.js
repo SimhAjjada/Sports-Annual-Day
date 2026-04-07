@@ -23,59 +23,82 @@ const generateMatches = (req, res) => {
 
       // continue existing logic
       // 🏏 Cricket → Team vs Team
-      if (sport_id === 1) {
+      // 🏏 Cricket → Team vs Team
+if (sport_id === 1) {
 
-        db.query(
-          "SELECT id FROM teams WHERE sport_id = 1",
-          (err2, teams) => {
+  db.query(
+    "SELECT id FROM teams WHERE sport_id = 1 AND event_id = ?", // ✅ FIXED
+    [event_id],
+    (err2, teams) => {
 
-            if (err2) return res.status(500).json({ error: "DB error" });
+      if (err2) {
+        console.error(err2);
+        return res.status(500).json({ error: "DB error" });
+      }
 
-            if (teams.length < 2) {
-              return res.json({ message: "Not enough teams" });
-            }
+      if (teams.length < 2) {
+        return res.json({ message: "Not enough teams" });
+      }
 
-            teams.sort(() => Math.random() - 0.5);
+      // 🔥 NO NEED TO SHUFFLE FOR 2 TEAMS
+      const matches = [];
+      let byeTeam = null;
 
-            const matches = [];
-            let byeTeam = null;
+      // Handle odd teams
+      if (teams.length % 2 === 1) {
+        byeTeam = teams.pop();
+      }
 
-            if (teams.length % 2 === 1) {
-              byeTeam = teams.pop();
-            }
+      // 🔥 MAIN FIX: STRICT PAIRING
+      for (let i = 0; i < teams.length; i += 2) {
 
-            for (let i = 0; i < teams.length; i += 2) {
-              matches.push([
-                event_id,
-                sport_id,
-                teams[i].id,
-                teams[i + 1].id,
-                1,
-                "pending"
-              ]);
-            }
+        if (!teams[i + 1]) break;
 
+        const t1 = teams[i].id;
+        const t2 = teams[i + 1].id;
+
+        matches.push([
+          event_id,
+          sport_id,
+          t1,
+          t2,
+          1,
+          "pending"
+        ]);
+      }
+
+      console.log("Generated matches:", matches);
+
+      // ❗ SAFETY CHECK
+      if (matches.length === 0) {
+        return res.json({ message: "No matches generated" });
+      }
+
+      db.query(
+        "INSERT INTO matches (event_id, sport_id, team1_id, team2_id, round, status) VALUES ?",
+        [matches],
+        (err3) => {
+
+          if (err3) {
+            console.error(err3);
+            return res.status(500).json({ error: "Insert error" });
+          }
+
+          // Handle BYE
+          if (byeTeam) {
             db.query(
-              "INSERT INTO matches (event_id, sport_id, team1_id, team2_id, round, status) VALUES ?",
-              [matches],
-              (err3) => {
-
-                if (err3) return res.status(500).json({ error: "Insert error" });
-
-                if (byeTeam) {
-                  db.query(
-                    "INSERT INTO matches (event_id, sport_id, bye_player_id, round, status, winner_id) VALUES (?, ?, ?, 1, 'completed', ?)",
-                    [event_id, sport_id, byeTeam.id, byeTeam.id]
-                  );
-                }
-
-                res.json({ message: "Cricket matches generated" });
-
-              }
+              "INSERT INTO matches (event_id, sport_id, bye_player_id, round, status, winner_id) VALUES (?, ?, ?, 1, 'completed', ?)",
+              [event_id, sport_id, byeTeam.id, byeTeam.id]
             );
           }
-        );
-      }
+
+          res.json({ message: "Cricket matches generated" });
+
+        }
+      );
+    }
+  );
+}
 
       // 🏸 Badminton / 🏓 TT
       else {
@@ -200,19 +223,30 @@ const startRound = (req, res) => {
 
   const { event_id, sport_id, round } = req.body;
 
+  console.log("START ROUND:", event_id, sport_id, round); // DEBUG
+
+  if (!event_id || !sport_id || !round) {
+    return res.status(400).json({ error: "Missing params" });
+  }
+
   db.query(
-    "UPDATE matches SET status='ongoing' WHERE event_id=? AND sport_id=? AND round=?",
+    `UPDATE matches 
+     SET status = 'ready' 
+     WHERE event_id = ? AND sport_id = ? AND round = ?`,
     [event_id, sport_id, round],
-    (err) => {
+    (err, result) => {
 
-      if (err) return res.status(500).json({ error: "DB error" });
+      if (err) {
+        console.error("START ROUND ERROR:", err); // 🔥 IMPORTANT
+        return res.status(500).json(err);
+      }
 
-      res.json({ message: `Round ${round} started` });
+      console.log("Rows updated:", result.affectedRows); // DEBUG
 
+      res.json({ message: "Round started successfully" });
     }
   );
 };
-
 
 //
 // 🟢 Mark Winner
@@ -317,27 +351,109 @@ const generateNextRound = (req, res) => {
 //
 const resetTournament = (req, res) => {
 
-  const { event_id } = req.body;
+  const { event_id, sport_id } = req.body;
 
-  if (!event_id) {
-    return res.status(400).json({ error: "event_id required" });
+  console.log("RESET API:", event_id, sport_id); // DEBUG
+
+  if (!event_id || !sport_id) {
+    return res.status(400).json({ error: "Missing params" });
   }
 
   db.query(
-    "DELETE FROM matches WHERE event_id=?",
-    [event_id],
-    (err) => {
+    "DELETE FROM matches WHERE event_id=? AND sport_id=?",
+    [event_id, sport_id],
+    (err, result) => {
 
       if (err) {
-        console.error(err);
-        return res.status(500).json({ error: "DB error" });
+        console.error("DB ERROR:", err);
+        return res.status(500).json(err);
       }
 
-      res.json({ message: "Tournament reset successfully" });
+      console.log("Deleted rows:", result.affectedRows); // DEBUG
 
+      res.json({ message: "Reset successful" });
     }
   );
 };
+
+const startMatch = (req, res) => {
+  const { match_id } = req.body;
+
+  db.query(
+    `UPDATE matches 
+     SET status='ongoing', started_at=NOW() 
+     WHERE id=?`,
+    [match_id],
+    (err) => {
+      if (err) return res.status(500).json(err);
+      res.json({ message: "Match started" });
+    }
+  );
+};
+
+const pauseMatch = (req, res) => {
+  const { match_id } = req.body;
+
+  db.query(
+    `UPDATE matches SET status='paused' WHERE id=?`,
+    [match_id],
+    (err) => {
+      if (err) return res.status(500).json(err);
+      res.json({ message: "Match paused" });
+    }
+  );
+};
+
+
+const resumeMatch = (req, res) => {
+  const { match_id } = req.body;
+
+  db.query(
+    `UPDATE matches SET status='ongoing' WHERE id=?`,
+    [match_id],
+    (err) => {
+      if (err) return res.status(500).json(err);
+      res.json({ message: "Match resumed" });
+    }
+  );
+};
+
+
+const submitReport = (req, res) => {
+  const { match_id, score1, score2, notes } = req.body;
+
+  db.query(
+    `UPDATE matches 
+     SET score1=?, score2=?, match_notes=?,
+         status='completed',
+         ended_at=NOW(),
+         winner_id = CASE 
+           WHEN ? > ? THEN team1_id 
+           ELSE team2_id 
+         END
+     WHERE id=?`,
+    [score1, score2, notes, score1, score2, match_id],
+    (err) => {
+      if (err) return res.status(500).json(err);
+      res.json({ message: "Match completed with report" });
+    }
+  );
+};
+
+
+const getReport = (req, res) => {
+  const { id } = req.params;
+
+  db.query(
+    `SELECT * FROM matches WHERE id=?`,
+    [id],
+    (err, result) => {
+      if (err) return res.status(500).json(err);
+      res.json(result[0]);
+    }
+  );
+};
+
 
 module.exports = {
   generateMatches,
@@ -345,5 +461,10 @@ module.exports = {
   startRound,
   markWinner,
   generateNextRound,
-  resetTournament
+  resetTournament,
+  startMatch,
+  pauseMatch,
+  resumeMatch,
+  submitReport,
+  getReport
 };

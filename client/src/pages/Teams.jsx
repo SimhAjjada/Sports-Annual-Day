@@ -3,22 +3,61 @@ import API from "../api/api";
 
 const Teams = () => {
   const [teams, setTeams] = useState([]);
+  const [selectedEvent, setSelectedEvent] = useState("");
+  const [events, setEvents] = useState([]);
 
-  const fetchTeams = () => {
-    API.get("/teams")
-      .then((res) => setTeams(res.data))
-      .catch((err) => console.error(err));
+  // 🔥 Fetch events
+  const fetchEvents = async () => {
+    try {
+      const res = await API.get("/events");
+      setEvents(res.data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
+  // 🔥 Fetch teams (event-based)
+  const fetchTeams = async () => {
+    if (!selectedEvent) return;
+
+    try {
+      const res = await API.get(`/teams?event_id=${selectedEvent}`);
+      setTeams(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // 🔥 Load events on page load
   useEffect(() => {
-    fetchTeams();
+    fetchEvents();
   }, []);
 
+  // 🔥 Load teams when event changes
+  useEffect(() => {
+    fetchTeams();
+  }, [selectedEvent]);
+
+  // 🔥 Generate teams
   const generateTeams = async () => {
-    await API.post("/teams/generate", { numberOfTeams: 2 });
-    fetchTeams(); // refresh teams
+    if (!selectedEvent) {
+      alert("Please select an event first");
+      return;
+    }
+
+    try {
+      await API.post("/teams/generate", {
+        numberOfTeams: 2,
+        event_id: selectedEvent,
+      });
+
+      fetchTeams(); // refresh
+    } catch (err) {
+      console.error(err);
+    }
   };
 
+  // 🔥 Group teams
   const groupedTeams = teams.reduce((acc, player) => {
     if (!acc[player.team_name]) acc[player.team_name] = [];
     acc[player.team_name].push(player.player_name);
@@ -29,6 +68,23 @@ const Teams = () => {
     <div>
       <h1 className="text-2xl font-bold mb-4">Cricket Teams</h1>
 
+      {/* 🔥 Event Dropdown */}
+      <div className="mb-4">
+        <select
+          value={selectedEvent}
+          onChange={(e) => setSelectedEvent(e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="">Select Event</option>
+          {events.map((event) => (
+            <option key={event.id} value={event.id}>
+              {event.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* 🔥 Generate Button */}
       <button
         onClick={generateTeams}
         className="mb-4 bg-blue-600 text-white px-4 py-2 rounded"
@@ -36,6 +92,7 @@ const Teams = () => {
         Generate Teams
       </button>
 
+      {/* 🔥 Teams Display */}
       {Object.keys(groupedTeams).length === 0 ? (
         <p>No teams generated yet.</p>
       ) : (

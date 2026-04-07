@@ -5,10 +5,15 @@ const Dashboard = () => {
   const [participants, setParticipants] = useState([]);
   const [teams, setTeams] = useState([]);
   const [matches, setMatches] = useState([]);
-
+  
   useEffect(() => {
     API.get("/participants").then((res) => setParticipants(res.data));
-    API.get("/teams").then((res) => setTeams(res.data));
+
+    // 🔥 NEW: get all cricket teams
+    API.get("/teams/all")
+      .then((res) => setTeams(res.data))
+      .catch((err) => console.error(err));
+
     API.get("/matches").then((res) => setMatches(res.data));
   }, []);
 
